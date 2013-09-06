@@ -25,8 +25,9 @@ you can find log file here:  ./logs/tomdawg.log
 
 ##usage
 with PUT, the path is determined from url path
+```
 curl -X PUT --data-binary @video.mp4 http://localhost:8089/put/test/video.mp4
-
+```
 sample response:
 ```json
 
@@ -42,8 +43,9 @@ sample response:
 ```
 
 with regular POST, path is determined by upload form name,value
+```
 curl -F multipart/test=@video.mp4 http://localhost:8089
-
+```
 sample response:
 ```json
 
