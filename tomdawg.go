@@ -52,12 +52,6 @@ func setupLogger() {
 	log.SetOutput(logw)
 }
 
-/*
-vayam-2:tomdog vayam$ curl -X PUT --data-binary @/Users/vayam/Downloads/violated_68790690_MP4_Plus_SD.mp4 http://localhost:8089/put/test/violated_68790690_MP4_Plus_SD.mp4
-{"Path":"/Users/vayam/tomdog/files/put/test/violated_68790690_MP4_Plus_SD.mp4","Status":"success","Description":"Uploaded successfully","Time":0,"Speed":0,"Size":1127145,"Recvd":1127145}vayam-2:tomdogcurl -F multipart/test=@/Users/vayam/Downloads/violated_68790690_MP4_Plus_SD.mp4 http://localhost:8089
-{"Path":"/Users/vayam/tomdog/files/multipart/test/violated_68790690_MP4_Plus_SD.mp4","Status":"success","Description":"Total Files: 1 Total Bytes: 1127145","Time":0,"Speed":0,"Size":0,"Recvd":0}vayam-2:tomdog vayam$
-*/
-
 func upload(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "PUT":
