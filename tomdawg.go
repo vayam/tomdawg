@@ -141,6 +141,9 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		totalBytes += n
 	}
 	ur.Status = "success"
+	//@todo
+	ur.Size = totalBytes
+	ur.Recvd = totalBytes
 	ur.Description = fmt.Sprintf("Total Files: %d Total Bytes: %d", uploadCount, totalBytes)
 	ur.Out(w)
 }

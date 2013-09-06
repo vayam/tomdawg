@@ -10,8 +10,11 @@ curl -X PUT --data-binary @video.mp4 http://localhost:8089/put/test/video.mp4
 
 sample response:
 ```json
-{"Path":"/Users/vayam/vayam-dev/tomdawg/files/put/test/video.mp4",
-"Status":"success","Description":"Uploaded successfully",
+
+{
+"Path":"/Users/vayam/vayam-dev/tomdawg/files/put/test/video.mp4",
+"Status":"success",
+"Description":"Uploaded successfully",
 "Time":0,
 "Speed":0,
 "Size":1127145,
@@ -23,11 +26,16 @@ curl -F multipart/test=@video.mp4 http://localhost:8089
 
 sample response:
 ```json
-{"Path":"/Users/vayam/vayam-dev/tomdawg/files/multipart/test/video.mp4",
+
+{
+"Path":"/Users/vayam/vayam-dev/tomdawg/files/multipart/test/video.mp4",
 "Status":"success",
 "Description":"Total Files: 1 Total Bytes: 1127145",
 "Time":0,
 "Speed":0,
 "Size":0,
-"Recvd":0}
+"Size":1127145,
+"Recvd":1127145
+}
+
 ```
