@@ -3,6 +3,30 @@ tomdawg
 
 simple upload server
 
+
+#build
+
+go build tomdawg.go
+
+#configure
+
+edit config.json
+
+```json
+{
+    "ListenPort": 8089,
+    "AssetPath": "./files"
+}
+```
+
+#run server
+
+./tomdawg
+
+#logs
+
+you can find log file here:  ./logs/tomdawg.log
+
 #usage
 
 with PUT, the path is determined from url path
