@@ -60,3 +60,8 @@ sample response:
 "Recvd":1127145
 }
 ```
+
+##todo
+
+- Add resumable upload support (tus.io)
+- return uploadspeeds as part of response
