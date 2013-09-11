@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,21 +15,24 @@ import (
 	"time"
 )
 
-const UPLOAD_RESPONSE_CONTENT_TYPE = "application/json"
-const SERVER_NAME = "tomdog"
+const (
+	uploadResponseContentType = "application/json"
+	serverName                = "tomdawg"
+)
 
-//Declare structures
+//Config listen port and path to store files
 type Config struct {
 	ListenPort int
 	AssetPath  string
 }
 
+//UploadResponse is returned as json response
 type UploadResponse struct {
 	Path, Status, Description string
 	Time, Speed, Size, Recvd  int64
 }
 
-func (ur UploadResponse) Out(dst io.Writer) {
+func (ur UploadResponse) out(dst io.Writer) {
 	b, _ := json.Marshal(ur)
 	dst.Write(b)
 }
@@ -44,7 +46,7 @@ func setupLogger() {
 		log.Println(err)
 		return
 	}
-	logw, err := os.Create(path.Join(logDir, fmt.Sprintf("%s.log", SERVER_NAME)))
+	logw, err := os.Create(path.Join(logDir, fmt.Sprintf("%s.log", serverName)))
 	if err != nil {
 		log.Println(err)
 		return
@@ -52,31 +54,51 @@ func setupLogger() {
 	log.SetOutput(logw)
 }
 
-func upload(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "PUT":
-		putHandler(w, r)
-	case "POST":
-		postHandler(w, r)
-	default:
-		UploadResponse{
-			Status:      "method_not_allowed",
-			Description: r.Method,
-		}.Out(w)
+func headHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Server", serverName)
+	w.Header().Set("Content-Type", uploadResponseContentType)
+
+	log.Printf("RawQuery %s\n", r.URL.RawQuery)
+	log.Printf("RawQuery %v\n", r.URL)
+
+	saveTo := path.Join(config.AssetPath, r.URL.Path)
+	fileInfo, err := os.Stat(saveTo)
+	if err == nil {
+		w.Header().Set("Offset", fmt.Sprintf("%d", fileInfo.Size()))
+		w.WriteHeader(200)
+	} else {
+		w.WriteHeader(404)
+	}
+}
+
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Server", serverName)
+
+	log.Printf("RawQuery %s\n", r.URL.RawQuery)
+	log.Printf("RawQuery %v\n", r.URL)
+
+	saveTo := path.Join(config.AssetPath, r.URL.Path)
+	_, err := os.Stat(saveTo)
+	if err == nil {
+		http.ServeFile(w, r, saveTo)
+	} else {
+		w.WriteHeader(404)
 	}
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
+
 	ur := UploadResponse{}
 	reader, err := r.MultipartReader()
 	if err != nil {
 		log.Println(err)
 		ur.Status = "multipart_reader_error"
 		ur.Description = err.Error()
-		ur.Out(w)
+		ur.out(w)
 		return
 	}
-	var totalBytes int64 = 0
+
+	var totalBytes int64
 	uploadCount := 0
 
 	for {
@@ -95,7 +117,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			ur.Status = "multipart_mkdir_error"
 			ur.Description = err.Error()
-			ur.Out(w)
+			ur.out(w)
 			return
 		}
 
@@ -107,7 +129,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 				Status:      "abs_file_error",
 				Description: err.Error(),
 				Path:        saveTo,
-			}.Out(w)
+			}.out(w)
 			return
 		}
 
@@ -118,7 +140,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			ur.Status = "multipart_create_error"
 			ur.Description = err.Error()
-			ur.Out(w)
+			ur.out(w)
 			return
 		}
 
@@ -128,7 +150,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			ur.Status = "multipart_write_error"
 			ur.Description = err.Error()
-			ur.Out(w)
+			ur.out(w)
 			return
 		}
 		uploadCount += 1
@@ -139,12 +161,12 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	ur.Size = totalBytes
 	ur.Recvd = totalBytes
 	ur.Description = fmt.Sprintf("Total Files: %d Total Bytes: %d", uploadCount, totalBytes)
-	ur.Out(w)
+	ur.out(w)
 }
 
 func putHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Server", SERVER_NAME)
-	w.Header().Set("Content-Type", UPLOAD_RESPONSE_CONTENT_TYPE)
+	w.Header().Set("Server", serverName)
+	w.Header().Set("Content-Type", uploadResponseContentType)
 
 	log.Printf("RawQuery %s\n", r.URL.RawQuery)
 	log.Printf("RawQuery %v\n", r.URL)
@@ -159,7 +181,7 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 			Status:      "mkdir_path_error",
 			Description: err.Error(),
 			Path:        saveTo,
-		}.Out(w)
+		}.out(w)
 		return
 	}
 
@@ -171,7 +193,7 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 			Status:      "abs_file_error",
 			Description: err.Error(),
 			Path:        saveTo,
-		}.Out(w)
+		}.out(w)
 		return
 	}
 	log.Printf("Absolute path Save to %s\n", saveTo)
@@ -229,7 +251,7 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("UPLOAD_STATS %s -> %d/%d bytes, %d KB/s total sec %d\n",
 			partialSaveTo, n, contentLength, ur.Speed, ur.Time)
 		if n != contentLength {
-			err := errors.New(fmt.Sprintf("Incomplete Upload %d/%d", n, contentLength))
+			err := fmt.Errorf("incomplete upload %d/%d", n, contentLength)
 			log.Println(err)
 			ur.Status = "incomplete_upload"
 			ur.Description = err.Error()
@@ -250,7 +272,25 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 		return ur, nil
 	}()
 	log.Println("Upload Response ->", ur)
-	ur.(UploadResponse).Out(w)
+	ur.(UploadResponse).out(w)
+}
+
+func upload(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "PUT":
+		putHandler(w, r)
+	case "POST":
+		postHandler(w, r)
+	case "HEAD":
+		headHandler(w, r)
+	case "GET":
+		getHandler(w, r)
+	default:
+		UploadResponse{
+			Status:      "method_not_allowed",
+			Description: r.Method,
+		}.out(w)
+	}
 }
 
 func main() {
