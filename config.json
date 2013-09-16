@@ -1,5 +1,6 @@
 {
     "ListenPort": 8089,
-    "AssetPath": "./files"
+    "AssetPath": "./files",
+    "MaxContentLength": 1000000000
 }
 

@@ -20,20 +20,32 @@ const (
 	serverName                = "tomdawg"
 )
 
-//Config listen port and path to store files
+//Config listen port and `path to store files
 type Config struct {
-	ListenPort int
-	AssetPath  string
+	ListenPort       int
+	AssetPath        string
+	MaxContentLength int64
 }
 
 //UploadResponse is returned as json response
 type UploadResponse struct {
 	Path, Status, Description string
-	Time, Speed, Size, Recvd  int64
+	Took, Speed, Size, Recvd  int64
+}
+
+type shortResponse struct {
+	Took  int64 //ms
+	Recvd int64 //received bytes
+	Size  int64 //bytes to send
 }
 
 func (ur UploadResponse) out(dst io.Writer) {
 	b, _ := json.Marshal(ur)
+	dst.Write(b)
+}
+
+func (sr shortResponse) out(dst io.Writer) {
+	b, _ := json.Marshal(sr)
 	dst.Write(b)
 }
 
@@ -101,6 +113,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	var totalBytes int64
 	uploadCount := 0
 
+	t0 := time.Now()
 	for {
 		part, err := reader.NextPart()
 		if err == io.EOF {
@@ -156,6 +169,11 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		uploadCount += 1
 		totalBytes += n
 	}
+	ur.Took = int64(time.Now().Sub(t0) / time.Millisecond)
+	if ur.Took > 0 {
+		ur.Speed = totalBytes / ur.Took
+	}
+
 	ur.Status = "success"
 	//@todo
 	ur.Size = totalBytes
@@ -243,13 +261,13 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 			return ur, err
 		}
 		ur.Recvd = n
-		ur.Time = int64(time.Now().Sub(t0).Seconds())
-		if ur.Time > 0 {
-			ur.Speed = n / (1024 * ur.Time)
+		ur.Took = int64(time.Now().Sub(t0) / time.Millisecond)
+		if ur.Took > 0 {
+			ur.Speed = n / ur.Took
 		}
 
-		log.Printf("UPLOAD_STATS %s -> %d/%d bytes, %d KB/s total sec %d\n",
-			partialSaveTo, n, contentLength, ur.Speed, ur.Time)
+		log.Printf("UPLOAD_STATS %s -> %d/%d bytes, %d KB/s total %d msec\n",
+			partialSaveTo, n, contentLength, ur.Speed, ur.Took)
 		if n != contentLength {
 			err := fmt.Errorf("incomplete upload %d/%d", n, contentLength)
 			log.Println(err)
@@ -273,6 +291,63 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 	log.Println("Upload Response ->", ur)
 	ur.(UploadResponse).out(w)
+}
+
+//check for file , if not file.part
+//parse file.info if entity-length specified  use LimitReader
+//use offset to seek to location file and start writing
+//upload_complete is optional
+func patchHandler(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func short(w http.ResponseWriter, r *http.Request) {
+	log.Printf("URL -> %v\n", r.URL)
+
+	w.Header().Set("Server", serverName)
+	switch r.Method {
+	case "PUT", "POST":
+		func() {
+			w.Header().Set("Content-Type", uploadResponseContentType)
+
+			//Content-Length is a must
+			contentLength, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+			if err != nil {
+				log.Println(err)
+				w.Header().Set("Short-Circuit-Error", err.Error())
+				w.WriteHeader(500)
+				return
+			}
+
+			//Make sure Content-Length < Max Content Length
+			if contentLength > config.MaxContentLength {
+				err := fmt.Errorf("Exceeed Max Upload Size")
+				log.Println(err)
+				w.Header().Set("Short-Circuit-Error", err.Error())
+				w.WriteHeader(500)
+				return
+			}
+
+			sr := shortResponse{Size: contentLength}
+
+			t0 := time.Now()
+			n, err := io.CopyN(ioutil.Discard, r.Body, contentLength)
+			if err != nil {
+				log.Println(err)
+				w.Header().Set("Short-Circuit-Error", err.Error())
+				w.WriteHeader(500)
+				return
+			}
+
+			sr.Recvd = n
+			sr.Took = int64(time.Now().Sub(t0) / time.Millisecond)
+			log.Printf("UPLOAD_STATS %d/%d bytes took %d msec\n", n, contentLength, sr.Took)
+			sr.out(w)
+		}()
+	default:
+		//Method not supported
+		w.WriteHeader(405)
+	}
 }
 
 func upload(w http.ResponseWriter, r *http.Request) {
@@ -319,6 +394,7 @@ func main() {
 	}
 
 	http.HandleFunc("/", upload)
+	http.HandleFunc("/short", short)
 	log.Printf("Listening on port %d\n", config.ListenPort)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.ListenPort), nil))
 }
