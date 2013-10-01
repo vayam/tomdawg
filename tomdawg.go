@@ -235,9 +235,10 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 		contentLength, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
 		if err != nil {
 			log.Println(err)
-			ur.Status = "invalid_content_length"
-			ur.Description = err.Error()
-			return ur, err
+			//ur.Status = "invalid_content_length"
+			//ur.Description = err.Error()
+			//return ur, err
+			ur.Size = 0
 		}
 		ur.Size = contentLength
 
@@ -271,9 +272,9 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 		if n != contentLength {
 			err := fmt.Errorf("incomplete upload %d/%d", n, contentLength)
 			log.Println(err)
-			ur.Status = "incomplete_upload"
-			ur.Description = err.Error()
-			return ur, err
+			//ur.Status = "incomplete_upload"
+			//ur.Description = err.Error()
+			//return ur, err
 		}
 
 		log.Printf("Renaming %s -> %s ", partialSaveTo, saveTo)
@@ -297,9 +298,31 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 //parse file.info if entity-length specified  use LimitReader
 //use offset to seek to location file and start writing
 //upload_complete is optional
+/*
 func patchHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Server", serverName)
+	w.Header().Set("Content-Type", uploadResponseContentType)
+
+	log.Printf("RawQuery %s\n", r.URL.RawQuery)
+	log.Printf("RawQuery %v\n", r.URL)
+
+	saveTo := path.Join(config.AssetPath, r.URL.Path)
+
+	fileInfo, err := os.Stat(saveTo)
+	if err == nil {
+		ur.Status = "success"
+		ur.Description = "Already Uploaded"
+		ur.Size = fileInfo.Size()
+		ur.Recvd = ur.Size
+		log.Printf("File %s Exists %d bytes\n", saveTo, ur.Size)
+		return ur, nil
+	}
+
+	partialSaveTo := fmt.Sprintf("%s.part", saveTo)
+
 
 }
+*/
 
 func short(w http.ResponseWriter, r *http.Request) {
 	log.Printf("URL -> %v\n", r.URL)
@@ -344,6 +367,11 @@ func short(w http.ResponseWriter, r *http.Request) {
 			log.Printf("UPLOAD_STATS %d/%d bytes took %d msec\n", n, contentLength, sr.Took)
 			sr.out(w)
 		}()
+	case "OPTIONS":
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
+		w.Header().Set("Access-Control-Allow-Methods", "PUT, POST")
+		//w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 	default:
 		//Method not supported
 		w.WriteHeader(405)
