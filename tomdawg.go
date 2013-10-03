@@ -70,9 +70,6 @@ func headHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Server", serverName)
 	w.Header().Set("Content-Type", uploadResponseContentType)
 
-	log.Printf("RawQuery %s\n", r.URL.RawQuery)
-	log.Printf("RawQuery %v\n", r.URL)
-
 	saveTo := path.Join(config.AssetPath, r.URL.Path)
 	fileInfo, err := os.Stat(saveTo)
 	if err == nil {
@@ -86,16 +83,21 @@ func headHandler(w http.ResponseWriter, r *http.Request) {
 func getHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Server", serverName)
 
-	log.Printf("RawQuery %s\n", r.URL.RawQuery)
-	log.Printf("RawQuery %v\n", r.URL)
-
 	saveTo := path.Join(config.AssetPath, r.URL.Path)
-	_, err := os.Stat(saveTo)
-	if err == nil {
-		http.ServeFile(w, r, saveTo)
-	} else {
+	info, err := os.Stat(saveTo)
+
+	if err != nil {
 		w.WriteHeader(404)
+		return
 	}
+
+	//Mabbe have allow directory traverse as configurable
+	if info.IsDir() {
+		w.WriteHeader(403)
+		return
+	}
+
+	http.ServeFile(w, r, saveTo)
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
@@ -185,9 +187,6 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 func putHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Server", serverName)
 	w.Header().Set("Content-Type", uploadResponseContentType)
-
-	log.Printf("RawQuery %s\n", r.URL.RawQuery)
-	log.Printf("RawQuery %v\n", r.URL)
 
 	saveTo := path.Join(config.AssetPath, r.URL.Path)
 
@@ -303,9 +302,6 @@ func patchHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Server", serverName)
 	w.Header().Set("Content-Type", uploadResponseContentType)
 
-	log.Printf("RawQuery %s\n", r.URL.RawQuery)
-	log.Printf("RawQuery %v\n", r.URL)
-
 	saveTo := path.Join(config.AssetPath, r.URL.Path)
 
 	fileInfo, err := os.Stat(saveTo)
@@ -325,13 +321,17 @@ func patchHandler(w http.ResponseWriter, r *http.Request) {
 */
 
 func short(w http.ResponseWriter, r *http.Request) {
-	log.Printf("URL -> %v\n", r.URL)
-
+	log.Printf("URL -> %v, RemoteAddr -> %s, X-Forwarded-For -> %v \n", r.URL, r.RemoteAddr, r.Header.Get("X-Forwarded-For"))
+	for k, v := range r.Header {
+		log.Println(k, ":", v)
+	}
 	w.Header().Set("Server", serverName)
 	switch r.Method {
 	case "PUT", "POST":
 		func() {
 			w.Header().Set("Content-Type", uploadResponseContentType)
+			//w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 
 			//Content-Length is a must
 			contentLength, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
@@ -370,8 +370,8 @@ func short(w http.ResponseWriter, r *http.Request) {
 	case "OPTIONS":
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Requested-With")
 		w.Header().Set("Access-Control-Allow-Methods", "PUT, POST")
-		//w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		//w.Header().Set("Access-Control-Allow-Origin", "*")
 	default:
 		//Method not supported
 		w.WriteHeader(405)
@@ -379,6 +379,7 @@ func short(w http.ResponseWriter, r *http.Request) {
 }
 
 func upload(w http.ResponseWriter, r *http.Request) {
+	log.Printf("URL -> %v, RemoteAddr -> %s\n", r.URL, r.RemoteAddr)
 	switch r.Method {
 	case "PUT":
 		putHandler(w, r)
@@ -421,6 +422,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", serverName)
+	})
 	http.HandleFunc("/", upload)
 	http.HandleFunc("/short", short)
 	log.Printf("Listening on port %d\n", config.ListenPort)
